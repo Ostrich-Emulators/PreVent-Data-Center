@@ -1,11 +1,11 @@
 package com.ostrichemulators.prevent;
 
+import com.ostrichemulators.prevent.App.ControllerAndParent;
 import com.ostrichemulators.prevent.WorkItem.Status;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.stream.Collectors;
-import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
@@ -22,13 +21,7 @@ import javafx.scene.Parent;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
-import javafx.scene.control.CheckBox;
-import javafx.scene.control.Label;
 import javafx.scene.control.OverrunStyle;
-import javafx.scene.control.RadioButton;
-import javafx.scene.control.Spinner;
-import javafx.scene.control.SpinnerValueFactory;
-import javafx.scene.control.SpinnerValueFactory.ListSpinnerValueFactory;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
@@ -37,7 +30,6 @@ import javafx.scene.control.TableView;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
-import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.nio.file.Files;
@@ -45,6 +37,8 @@ import java.util.Collection;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.value.ObservableValue;
+import javafx.scene.control.ButtonBar.ButtonData;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.TableColumn.CellDataFeatures;
 import javafx.util.Callback;
 
@@ -83,119 +77,13 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
   private TableColumn<Conversion, String> containercol;
 
   @FXML
-  private CheckBox nativestp;
-
-  @FXML
-  private CheckBox usephilips;
-
-  @FXML
-  private CheckBox removecontainers;
-
-  @FXML
-  private Spinner<Integer> dockercnt;
-
-  @FXML
-  private Spinner<Integer> durationtimer;
-
-  @FXML
-  private Label outputlbl;
-
-  @FXML
-  private Label loglbl;
-
-  @FXML
   private SplitPane splitter;
-
-  @FXML
-  private RadioButton dockerconverter;
-
-  @FXML
-  private RadioButton nativeconverter;
 
   private Path savelocation;
   private WorkItemEntryController detailscontroller;
 
   @FXML
-  void saveconfig() {
-    App.converter.setMaxRunners( dockercnt.getValue() );
-    dockercnt.setValueFactory( new SpinnerValueFactory.IntegerSpinnerValueFactory( 1,
-          10, dockercnt.getValue() ) );
-
-    App.prefs
-          .setMaxConversionMinutes( durationtimer.getValue() )
-          .setNativeStp( nativestp.isSelected() )
-          .setMaxDockerCount( dockercnt.getValue() )
-          .setStpPhilips( usephilips.isSelected() )
-          .setRemoveDockerOnSuccess( removecontainers.isSelected() )
-          .setLogPath( Paths.get( loglbl.getText() ) );
-    if ( !"From Input".equals( outputlbl.getText() ) ) {
-      App.prefs.setOutputPath( Paths.get( outputlbl.getText() ) );
-    }
-  }
-
-  private void loadPrefs() {
-    nativestp.setSelected( App.prefs.useNativeStp() );
-    usephilips.setSelected( App.prefs.isStpPhilips() );
-
-    if ( App.prefs.useNativeConverter() ) {
-      nativeconverter.setSelected( true );
-    }
-
-    removecontainers.setSelected( App.prefs.removeDockerOnSuccess() );
-    App.converter.setMaxRunners( App.prefs.getMaxDockerCount() );
-    dockercnt.setValueFactory( new SpinnerValueFactory.IntegerSpinnerValueFactory( 1,
-          10, App.converter.getMaxRunners() ) );
-
-    outputlbl.setTextOverrun( OverrunStyle.CENTER_ELLIPSIS );
-    Path outpath = App.prefs.getOutputPath();
-    outputlbl.setText( null == outpath ? "From Input" : outpath.toString() );
-
-    if ( null != outpath && !Files.exists( outpath ) ) {
-      LOG.info( "creating output directory: {}", outpath );
-
-      boolean created = outpath.toFile().mkdirs();
-      if ( !created ) {
-        Alert alert = new Alert( Alert.AlertType.ERROR );
-        alert.setTitle( "Docker Images Missing" );
-        alert.setHeaderText( "Docker is not Initialized Properly" );
-        ButtonType exitbtn = new ButtonType( "Cancel", ButtonBar.ButtonData.CANCEL_CLOSE );
-        alert.getButtonTypes().setAll( exitbtn );
-        alert.setContentText( "Docker may not be started, or the ry99/prevent image could not be pulled.\nOn Windows, Docker must be listening to port 2375.\nContinuing with Native Converter" );
-
-      }
-    }
-
-    loglbl.setTextOverrun( OverrunStyle.CENTER_ELLIPSIS );
-    Path logdirpath = App.prefs.getLogPath();
-    loglbl.setText( logdirpath.toString() );
-
-    ListSpinnerValueFactory<Integer> vfac = new SpinnerValueFactory.ListSpinnerValueFactory<>(
-          FXCollections.observableArrayList( 10, 30, 60, 180, 480, Integer.MAX_VALUE ) );
-    vfac.setConverter( new StringConverter<Integer>() {
-      @Override
-      public String toString( Integer t ) {
-        if ( t <= 60 ) {
-          return String.format( "%d minutes", t );
-        }
-        if ( t < Integer.MAX_VALUE ) {
-          return String.format( "%d hours", t / 60 );
-        }
-        return "Unlimited";
-      }
-
-      @Override
-      public Integer fromString( String string ) {
-        for ( Integer i : vfac.getItems() ) {
-          if ( toString( i ).equals( string ) ) {
-            return i;
-          }
-        }
-        return Integer.MAX_VALUE;
-      }
-    } );
-    vfac.setValue( Integer.MAX_VALUE );
-    durationtimer.setValueFactory( vfac );
-  }
+  private PreferencesController preferencesController;
 
   @Override
   public void initialize( URL url, ResourceBundle rb ) {
@@ -212,11 +100,7 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
       LOG.error( "{}", x );
     }
 
-    removecontainers.disableProperty().bind( nativeconverter.selectedProperty() );
-
     fixTableLayout();
-
-    loadPrefs();
 
     Path outpath = App.prefs.getOutputPath();
     if ( null != outpath && !Files.exists( outpath ) ) {
@@ -234,15 +118,12 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
       }
     }
 
-    boolean natives = nativeconverter.isSelected();
+    boolean natives = App.prefs.useNativeConverter();
 
     if ( App.converter.useNativeConverters( natives ) ) {
       LOG.debug( "Converter is ready!" );
     }
     else if ( !natives ) {
-      dockerconverter.setDisable( true );
-      nativeconverter.setSelected( true );
-
       Alert alert = new Alert( Alert.AlertType.ERROR );
       alert.setTitle( "Docker Images Missing" );
       alert.setHeaderText( "Docker is not Initialized Properly" );
@@ -338,7 +219,7 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
 
   @FXML
   void switchToSecondary() throws IOException {
-    App.setRoot( "secondary" );
+    App.setRoot( "secondary", SecondaryController.class );
   }
 
   @FXML
@@ -373,6 +254,24 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
 
   private void saveWorklist() throws IOException {
     Worklist.save( table.getItems().stream().map( conv -> conv.getItem() ).collect( Collectors.toList() ), savelocation );
+  }
+
+  @FXML
+  void openPrefs() throws IOException {
+    ControllerAndParent candp = App.loadFXML( "preferences", PreferencesController.class );
+
+    ButtonType save = new ButtonType( "Save", ButtonData.OK_DONE );
+    ButtonType cancel = new ButtonType( "Cancel", ButtonData.CANCEL_CLOSE );
+    Dialog<ButtonType> dialog = new Dialog<>();
+    dialog.getDialogPane().getButtonTypes().add( cancel );
+    dialog.getDialogPane().getButtonTypes().add( save );
+    dialog.getDialogPane().setContent( candp.parent );
+    dialog.setTitle( "Conversion Setup" );
+    dialog.showAndWait().ifPresent( resp -> {
+      if ( ButtonData.OK_DONE.equals( resp.getButtonData() ) ) {
+        PreferencesController.class.cast( candp.controller ).saveconfig();
+      }
+    } );
   }
 
   @FXML
@@ -421,39 +320,6 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
     catch ( IOException xx ) {
       LOG.warn( "Could not save WorkItem update", xx );
     }
-  }
-
-  @FXML
-  void selectOutputDir() {
-    DirectoryChooser chsr = new DirectoryChooser();
-    chsr.setTitle( "Select Output Directory" );
-
-    Path outdir = App.prefs.getOutputPath();
-    if ( null != outdir && Files.exists( outdir ) ) {
-      chsr.setInitialDirectory( outdir.toFile() );
-    }
-    Window window = table.getScene().getWindow();
-
-    File dir = chsr.showDialog( window );
-    outputlbl.setText( dir.getAbsolutePath() );
-  }
-
-  @FXML
-  void setOutputFromInput() {
-    outputlbl.setText( "From Input" );
-  }
-
-  @FXML
-  void selectLogDir() {
-    DirectoryChooser chsr = new DirectoryChooser();
-    chsr.setTitle( "Select Log Directory" );
-
-    Path outdir = App.prefs.getLogPath();
-    chsr.setInitialDirectory( outdir.toFile() );
-    Window window = table.getScene().getWindow();
-
-    File dir = chsr.showDialog( window );
-    loglbl.setText( dir.getAbsolutePath() );
   }
 
   private static class LocalDateTableCell extends TableCell<Conversion, LocalDateTime> {
