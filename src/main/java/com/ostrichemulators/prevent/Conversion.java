@@ -90,7 +90,14 @@ public class Conversion {
     listeners.stream().forEach( l -> l.itemChanged( item ) );
   }
 
-  public Path getLog( LogType type, boolean err ) {
+  /**
+   * Gets the location of the saved log files, whether or not they exist
+   *
+   * @param type
+   * @param err
+   * @return
+   */
+  public Path getSavedLog( LogType type, boolean err ) {
     Path datadir = getLogDir();
     String gz = ( err
                   ? "stderr.gz"
@@ -98,8 +105,27 @@ public class Conversion {
     return datadir.resolve( type + "-" + gz );
   }
 
+  /**
+   * Gets a Reader for the log files for this item. If the item is currently
+   * being preprocessed or running, this function returns the stdout/stderr of
+   * the running process. If the item is not running, it returns a Reader to the
+   * saved logs, if they exist
+   *
+   * @param type
+   * @param err
+   * @return
+   * @throws IOException if the desired log does not exist
+   */
   public Reader getLogReader( LogType type, boolean err ) throws IOException {
-    Path path = getLog( type, err );
+    // if we're currently running, use the "live" output
+    if ( ( isStatus( Status.PREPROCESSING ) && LogType.STP == type )
+          || ( isStatus( Status.RUNNING ) && LogType.CONVERSION == type ) ) {
+      return Files.newBufferedReader( err
+                                      ? getLogable().getErr()
+                                      : getLogable().getOut() );
+    }
+
+    Path path = getSavedLog( type, err );
     File datadir = path.getParent().toFile();
     if ( !( datadir.exists() && datadir.isDirectory() ) ) {
       throw new IOException( "Cannot locate log directory (or not a directory): " + datadir );

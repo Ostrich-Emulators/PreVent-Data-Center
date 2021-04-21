@@ -267,11 +267,12 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
     dialog.getDialogPane().getButtonTypes().add( save );
     dialog.getDialogPane().setContent( candp.parent );
     dialog.setTitle( "Conversion Setup" );
-    dialog.showAndWait().ifPresent( resp -> {
-      if ( ButtonData.OK_DONE.equals( resp.getButtonData() ) ) {
-        PreferencesController.class.cast( candp.controller ).saveconfig();
-      }
-    } );
+    dialog.showAndWait()
+          .map( resp -> resp.getButtonData() )
+          .filter( bd -> ButtonData.OK_DONE.equals( bd ) )
+          .ifPresent( resp -> {
+            PreferencesController.class.cast( candp.controller ).saveconfig();
+          } );
   }
 
   @FXML

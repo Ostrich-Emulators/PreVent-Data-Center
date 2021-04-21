@@ -11,6 +11,7 @@ import com.ostrichemulators.prevent.conversion.Logable;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.stream.Collectors;
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
@@ -59,9 +60,9 @@ public class WorkItemEntryController {
 
       Logable l = item.getLogable();
       if ( null == l ) {
-        stpbtn.setDisable( !Files.exists( item.getLog( LogType.STP, false ) ) );
-        errbtn.setDisable( !Files.exists( item.getLog( LogType.CONVERSION, true ) ) );
-        outbtn.setDisable( !Files.exists( item.getLog( LogType.CONVERSION, false ) ) );
+        stpbtn.setDisable( !Files.exists( item.getSavedLog( LogType.STP, false ) ) );
+        errbtn.setDisable( !Files.exists( item.getSavedLog( LogType.CONVERSION, true ) ) );
+        outbtn.setDisable( !Files.exists( item.getSavedLog( LogType.CONVERSION, false ) ) );
       }
       else {
         if ( Status.PREPROCESSING == newer ) {
@@ -70,7 +71,7 @@ public class WorkItemEntryController {
           outbtn.setDisable( true );
         }
         else if ( Status.RUNNING == newer ) {
-          stpbtn.setDisable( !Files.exists( item.getLog( LogType.STP, false ) ) );
+          stpbtn.setDisable( !Files.exists( item.getSavedLog( LogType.STP, false ) ) );
           errbtn.setDisable( !Files.exists( l.getErr() ) );
           outbtn.setDisable( !Files.exists( l.getOut() ) );
         }
@@ -115,8 +116,6 @@ public class WorkItemEntryController {
   }
 
   private void show( LogType type, boolean err ) {
-
-    // FIXME: if currently running, look at the logable
     try ( Reader input = item.getLogReader( type, err ) ) {
       listview.getItems().setAll( IOUtils.readLines( input ).stream().filter( s -> !s.isBlank() )
             .collect( Collectors.toList() ) );

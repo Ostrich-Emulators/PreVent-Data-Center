@@ -48,9 +48,21 @@ public class NativeConverter extends AbstractConverter {
       ProcessInfo cnv = null;
       cnv = null;
       boolean doxml = item.needsStpToXml();
+      boolean removexml = doxml;
       try {
         File f = item.getLogDir().toFile();
-        if ( !f.exists() ) {
+        if ( f.exists() ) {
+          if ( f.isDirectory() ) {
+            for ( File file : f.listFiles() ) {
+              Files.delete( file.toPath() );
+            }
+          }
+          else {
+            Files.delete( item.getLogDir() );
+            f.mkdirs();
+          }
+        }
+        else {
           f.mkdirs();
         }
 
@@ -128,6 +140,7 @@ public class NativeConverter extends AbstractConverter {
           FileUtils.deleteQuietly( fmtcnv.stdoutfile );
           item.setLogable( null );
 
+          removexml = false;
           switch ( reason ) {
             case TOO_LONG:
               item.getItem().killed();
@@ -139,6 +152,7 @@ public class NativeConverter extends AbstractConverter {
               break;
             case COMPLETED:
               item.getItem().finished( LocalDateTime.now() );
+              removexml = true;
               break;
             case SHUTDOWN:
               // don't do anything here (the container is still running)
@@ -159,7 +173,7 @@ public class NativeConverter extends AbstractConverter {
       finally {
         item.tellListeners();
 
-        if ( doxml ) {
+        if ( removexml ) {
           LOG.debug( "removing XML from STPtoXML conversion: {}", item.getXmlPath() );
           item.getXmlPath().toFile().delete();
         }

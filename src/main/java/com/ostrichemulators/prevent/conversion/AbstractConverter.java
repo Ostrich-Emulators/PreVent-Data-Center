@@ -84,14 +84,14 @@ public abstract class AbstractConverter implements Converter {
     // FIXME: check conv.compresslogs before compressing
     if ( proc.stderrfile.length() > 0 ) {
       try ( Reader input = new FileReader( proc.stderrfile );
-            OutputStream outstream = new GZIPOutputStream( new FileOutputStream( conv.getLog( type, true ).toFile() ) ) ) {
+            OutputStream outstream = new GZIPOutputStream( new FileOutputStream( conv.getSavedLog( type, true ).toFile() ) ) ) {
         IOUtils.copy( input, outstream, StandardCharsets.UTF_8.toString() );
       }
     }
 
     if ( proc.stdoutfile.length() > 0 ) {
       try ( Reader input = new FileReader( proc.stdoutfile );
-            OutputStream outstream = new GZIPOutputStream( new FileOutputStream( conv.getLog( type, false ).toFile() ) ) ) {
+            OutputStream outstream = new GZIPOutputStream( new FileOutputStream( conv.getSavedLog( type, false ).toFile() ) ) ) {
         IOUtils.copy( input, outstream, StandardCharsets.UTF_8.toString() );
       }
     }
