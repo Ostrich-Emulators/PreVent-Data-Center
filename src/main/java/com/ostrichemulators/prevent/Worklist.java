@@ -5,9 +5,7 @@
  */
 package com.ostrichemulators.prevent;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.ostrichemulators.prevent.WorkItem.Status;
 import com.ostrichemulators.prevent.WorkItem.WorkItemBuilder;
 import java.io.BufferedReader;
 import java.io.File;
@@ -16,13 +14,19 @@ import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
@@ -32,7 +36,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author ryan
  */
-public class Worklist {
+public class Worklist implements AutoCloseable {
 
   private final Connection conn;
 
@@ -46,7 +50,8 @@ public class Worklist {
         "mat73", "mat73",
         "stp", "stp" );
 
-  private static ObjectMapper objmap;
+  //private static ObjectMapper objmap;
+  private final List<WorkItem> items = new ArrayList<>();
 
   private Worklist( Connection c ) {
     conn = c;
@@ -66,32 +71,129 @@ public class Worklist {
     }
   }
 
-  public List<WorkItem> list(){
-    return new ArrayList<>();
-  }
+  public List<WorkItem> list() {
+    try ( PreparedStatement ps = conn.prepareStatement( "SELECT uuid,bytes,containerid,started,finished,format,status,message,inputpath,outputpath FROM workitem" ) ) {
+      try ( ResultSet rs = ps.executeQuery() ) {
+        while ( rs.next() ) {
+          /* WorkItem( Path file, String id, String containerId, LocalDateTime started,
+        LocalDateTime finished, String type, long size, Path outputdir ) {*/
+          String id = rs.getString( 1 );
+          long size = rs.getLong( 2 );
+          String container = rs.getString( 3 );
+          Timestamp start = rs.getTimestamp( 4 );
+          Timestamp end = rs.getTimestamp( 5 );
+          String format = rs.getString( 6 );
+          Status stat = Status.values()[rs.getInt( 7 )];
+          String msg = rs.getString( 8 );
+          Path inp = Path.of( rs.getString( 9 ) );
+          Path outp = Path.of( rs.getString( 10 ) );
 
-  public static List<WorkItem> open2( Path saveloc ) throws IOException {
-    List<WorkItem> list = new ArrayList<>();
-    if ( null == objmap ) {
-      objmap = new ObjectMapper();
-      objmap.registerModule( new JavaTimeModule() );
-      objmap.configure( SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false );
-      objmap.enable( SerializationFeature.INDENT_OUTPUT );
+          WorkItem item = new WorkItem( inp, id, container, ( null == start ? null : start.toLocalDateTime() ),
+                ( null == end ? null : end.toLocalDateTime() ), format, size, outp );
+          item.setStatus( stat );
+          item.setMessage( msg );
+          items.add( item );
+        }
+      }
+    }
+    catch ( SQLException x ) {
+      LOG.error( "", x );
     }
 
-    File file = saveloc.toFile();
-    if ( file.exists() ) {
-      WorkItem[] reads = objmap.readValue( saveloc.toFile(), WorkItem[].class );
-      list.addAll( Arrays.asList( reads ) );
-    }
-    return list;
+    return Collections.unmodifiableList( items );
   }
 
-  public static void save( List<WorkItem> items ) throws IOException {
-//    if ( !savedloc.getParent().toFile().exists() ) {
-//      savedloc.getParent().toFile().mkdirs();
+//  public static List<WorkItem> open2( Path saveloc ) throws IOException {
+//    List<WorkItem> list = new ArrayList<>();
+//    if ( null == objmap ) {
+//      objmap = new ObjectMapper();
+//      objmap.registerModule( new JavaTimeModule() );
+//      objmap.configure( SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false );
+//      objmap.enable( SerializationFeature.INDENT_OUTPUT );
 //    }
-//    objmap.writeValue( savedloc.toFile(), items );
+//
+//    File file = saveloc.toFile();
+//    if ( file.exists() ) {
+//      WorkItem[] reads = objmap.readValue( saveloc.toFile(), WorkItem[].class );
+//      list.addAll( Arrays.asList( reads ) );
+//    }
+//    return list;
+//  }
+  public void upsert( List<WorkItem> upserts ) throws IOException {
+    // update or insert all the items in the list
+    try ( PreparedStatement getOld = conn.prepareStatement( "SELECT uuid,id FROM workitem" );
+          PreparedStatement upd = conn.prepareStatement( "UPDATE workitem SET containerid=?,started=?,finished=?,format=?,status=?,message=? WHERE id=?" );
+          PreparedStatement ins = conn.prepareStatement( "INSERT INTO workitem(uuid, bytes, containerid,started,finished,format,status,message,inputpath,outputpath) VALUES (?,?,?,?,?,?,?,?,?,?) " ) ) {
+      Map<String, Integer> updlkp = new HashMap<>();
+      try ( ResultSet rs = getOld.executeQuery() ) {
+        while ( rs.next() ) {
+          updlkp.put( rs.getString( 1 ), rs.getInt( 2 ) );
+        }
+      }
+
+      // FIXME: do all this in a transaction
+      List<WorkItem> updates = upserts.stream()
+            .filter( wi -> updlkp.containsKey( wi.getId() ) )
+            .collect( Collectors.toList() );
+      List<WorkItem> inserts = upserts.stream()
+            .filter( wi -> !updlkp.containsKey( wi.getId() ) )
+            .collect( Collectors.toList() );
+
+      for ( WorkItem wi : updates ) {
+        //containerid=?,started=?,finished=?,format=?,status=?,message=? WHERE id=?
+        upd.setString( 1, wi.getContainerId() );
+        if ( null == wi.getStarted() ) {
+          upd.setNull( 2, Types.TIMESTAMP );
+        }
+        else {
+          upd.setTimestamp( 2, Timestamp.valueOf( wi.getStarted() ) );
+        }
+        if ( null == wi.getFinished() ) {
+          upd.setNull( 3, Types.TIMESTAMP );
+        }
+        else {
+          upd.setTimestamp( 3, Timestamp.valueOf( wi.getFinished() ) );
+        }
+
+        upd.setString( 4, wi.getType() );
+        upd.setInt( 5, wi.getStatus().ordinal() );
+        upd.setString( 6, wi.getMessage() );
+        upd.setInt( 7, updlkp.get( wi.getId() ) );
+        upd.execute();
+
+        items.set( items.indexOf( wi ), wi ); // is this necessary?
+      }
+
+      for ( WorkItem wi : inserts ) {
+        //uuid, bytes, containerid,started,finished,format,status,message,inputpath,outputpath
+        ins.setString( 1, wi.getId() );
+        ins.setLong( 2, wi.getBytes() );
+        ins.setString( 3, wi.getContainerId() );
+        if ( null == wi.getStarted() ) {
+          ins.setNull( 4, Types.TIMESTAMP );
+        }
+        else {
+          ins.setTimestamp( 4, Timestamp.valueOf( wi.getStarted() ) );
+        }
+        if ( null == wi.getFinished() ) {
+          ins.setNull( 5, Types.TIMESTAMP );
+        }
+        else {
+          ins.setTimestamp( 5, Timestamp.valueOf( wi.getFinished() ) );
+        }
+        ins.setString( 6, wi.getType() );
+        ins.setInt( 7, wi.getStatus().ordinal() );
+        ins.setString( 8, wi.getMessage() );
+        ins.setString( 9, wi.getPath().toString() );
+        ins.setString( 10, wi.getOutputPath().toString() );
+        ins.execute();
+        items.add( wi );
+      }
+    }
+    catch ( SQLException x ) {
+      throw new IOException( x );
+    }
+
   }
 
   public static Optional<WorkItem> from( Path p, boolean nativestp ) {
@@ -225,12 +327,23 @@ public class Worklist {
         }
         catch ( SQLException x ) {
           // X0Y32 means table already exists
-          if ( !"X0Y32".equals( x.getSQLState() ) ) {
-            LOG.info( "problem with SQL: " + sql );
+          // 23505 is a duplicate value (for the status lookup table)
+          if ( !( "X0Y32".equals( x.getSQLState() ) || "23505".equals( x.getSQLState() ) ) ) {
+            LOG.info( "problem with SQL: {}", sql );
             throw x;
           }
         }
       }
+    }
+  }
+
+  @Override
+  public void close() throws Exception {
+    try {
+      conn.close();
+    }
+    catch ( SQLException x ) {
+      // don't care
     }
   }
 }

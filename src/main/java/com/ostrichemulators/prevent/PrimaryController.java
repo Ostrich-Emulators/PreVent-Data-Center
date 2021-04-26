@@ -246,7 +246,7 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
   }
 
   private void saveWorklist() throws IOException {
-    worklist.save( table.getItems().stream().map( conv -> conv.getItem() ).collect( Collectors.toList() ) );
+    worklist.upsert( table.getItems().stream().map( conv -> conv.getItem() ).collect( Collectors.toList() ) );
   }
 
   @FXML
@@ -384,7 +384,7 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
           return (ObservableValue<T>) ( item.bytesProperty() );
         case "path":
           T val = (T) item.getPath();
-          return new ReadOnlyObjectWrapper<T>( val );
+          return new ReadOnlyObjectWrapper<>( val );
         case "outputPath":
           return (ObservableValue<T>) ( item.outputPathProperty() );
         case "started":

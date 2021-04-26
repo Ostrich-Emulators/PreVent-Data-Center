@@ -53,7 +53,7 @@ public final class WorkItem {
     return new WorkItemBuilder( p );
   }
 
-  private WorkItem( Path file, String id, String containerId, LocalDateTime started,
+  WorkItem( Path file, String id, String containerId, LocalDateTime started,
         LocalDateTime finished, String type, long size, Path outputdir ) {
     setPath( file );
     this.containerId.set( containerId );
