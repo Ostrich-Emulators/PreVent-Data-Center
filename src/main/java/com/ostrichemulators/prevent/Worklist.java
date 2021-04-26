@@ -9,9 +9,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.ostrichemulators.prevent.WorkItem.WorkItemBuilder;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -28,6 +34,8 @@ import org.slf4j.LoggerFactory;
  */
 public class Worklist {
 
+  private final Connection conn;
+
   private static final Logger LOG = LoggerFactory.getLogger( Worklist.class );
   private static final Map<String, String> EXT_TYPE_LKP = Map.of(
         "medi", "tdms",
@@ -40,7 +48,29 @@ public class Worklist {
 
   private static ObjectMapper objmap;
 
-  public static List<WorkItem> open( Path saveloc ) throws IOException {
+  private Worklist( Connection c ) {
+    conn = c;
+  }
+
+  public static Worklist open( Path saveloc ) throws IOException {
+    try {
+      Class.forName( "org.apache.derby.jdbc.EmbeddedDriver" ).getDeclaredConstructor().newInstance();
+      Connection conn = DriverManager.getConnection( "jdbc:derby:" + saveloc.toAbsolutePath() + ";create=true" );
+
+      checkAndCreate( conn );
+
+      return new Worklist( conn );
+    }
+    catch ( Exception x ) {
+      throw new IOException( x );
+    }
+  }
+
+  public List<WorkItem> list(){
+    return new ArrayList<>();
+  }
+
+  public static List<WorkItem> open2( Path saveloc ) throws IOException {
     List<WorkItem> list = new ArrayList<>();
     if ( null == objmap ) {
       objmap = new ObjectMapper();
@@ -57,11 +87,11 @@ public class Worklist {
     return list;
   }
 
-  public static void save( List<WorkItem> items, Path savedloc ) throws IOException {
-    if ( !savedloc.getParent().toFile().exists() ) {
-      savedloc.getParent().toFile().mkdirs();
-    }
-    objmap.writeValue( savedloc.toFile(), items );
+  public static void save( List<WorkItem> items ) throws IOException {
+//    if ( !savedloc.getParent().toFile().exists() ) {
+//      savedloc.getParent().toFile().mkdirs();
+//    }
+//    objmap.writeValue( savedloc.toFile(), items );
   }
 
   public static Optional<WorkItem> from( Path p, boolean nativestp ) {
@@ -182,5 +212,25 @@ public class Worklist {
     }
 
     return items;
+  }
+
+  private static void checkAndCreate( Connection c ) throws IOException, SQLException {
+    try ( BufferedReader create = new BufferedReader( new InputStreamReader( Worklist.class.getResourceAsStream( "/create.sql" ) ) ) ) {
+      String allsql = create.lines()
+            .map( str -> str.replaceAll( "--.*", "" ) )
+            .reduce( "", ( prev, next ) -> prev + next );
+      for ( String sql : allsql.split( ";" ) ) {
+        try ( Statement s = c.createStatement() ) {
+          s.execute( sql );
+        }
+        catch ( SQLException x ) {
+          // X0Y32 means table already exists
+          if ( !"X0Y32".equals( x.getSQLState() ) ) {
+            LOG.info( "problem with SQL: " + sql );
+            throw x;
+          }
+        }
+      }
+    }
   }
 }

@@ -79,18 +79,16 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
   @FXML
   private SplitPane splitter;
 
-  private Path savelocation;
+  private Worklist worklist;
   private WorkItemEntryController detailscontroller;
-
-  @FXML
-  private PreferencesController preferencesController;
 
   @Override
   public void initialize( URL url, ResourceBundle rb ) {
-    savelocation = App.getConfigLocation();
 
     FXMLLoader loader = new FXMLLoader( App.class.getResource( "workitementry.fxml" ) );
     try {
+      worklist = Worklist.open( App.getConfigLocation() );
+
       Parent parent = loader.load();
       detailscontroller = loader.getController();
       splitter.getItems().add( parent );
@@ -143,30 +141,25 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
       }
     }
 
-    try {
-      List<WorkItem> loadeditems = Worklist.open( savelocation );
+    List<WorkItem> loadeditems = worklist.list();
 
-      table.setRowFactory( tv -> {
-        TableRow<Conversion> row = new TableRow();
-        row.setOnMouseClicked( event -> {
-          Conversion item = row.getItem();
-          if ( !row.isEmpty() ) {
-            detailscontroller.setItem( item );
-            if ( event.getClickCount() > 1 ) {
-              toggleDetails( item );
-            }
+    table.setRowFactory( tv -> {
+      TableRow<Conversion> row = new TableRow();
+      row.setOnMouseClicked( event -> {
+        Conversion item = row.getItem();
+        if ( !row.isEmpty() ) {
+          detailscontroller.setItem( item );
+          if ( event.getClickCount() > 1 ) {
+            toggleDetails( item );
           }
-        } );
-        return row;
+        }
       } );
+      return row;
+    } );
 
-      Collection<Conversion> allitems = App.converter.reinitializeItems( loadeditems, this );
+    Collection<Conversion> allitems = App.converter.reinitializeItems( loadeditems, this );
 
-      table.getItems().addAll( allitems );
-    }
-    catch ( IOException x ) {
-      LOG.error( "{}", x );
-    }
+    table.getItems().addAll( allitems );
   }
 
   private void toggleDetails( Conversion item ) {
@@ -253,7 +246,7 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
   }
 
   private void saveWorklist() throws IOException {
-    Worklist.save( table.getItems().stream().map( conv -> conv.getItem() ).collect( Collectors.toList() ), savelocation );
+    worklist.save( table.getItems().stream().map( conv -> conv.getItem() ).collect( Collectors.toList() ) );
   }
 
   @FXML
@@ -393,7 +386,7 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
           T val = (T) item.getPath();
           return new ReadOnlyObjectWrapper<T>( val );
         case "outputPath":
-          return (ObservableValue<T>) ( item.outputPathProperty());
+          return (ObservableValue<T>) ( item.outputPathProperty() );
         case "started":
           return (ObservableValue<T>) ( item.startedProperty() );
         case "finished":
