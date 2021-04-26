@@ -393,7 +393,7 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
           T val = (T) item.getPath();
           return new ReadOnlyObjectWrapper<T>( val );
         case "outputPath":
-          return (ObservableValue<T>) ( item.messageProperty() );
+          return (ObservableValue<T>) ( item.outputPathProperty());
         case "started":
           return (ObservableValue<T>) ( item.startedProperty() );
         case "finished":
