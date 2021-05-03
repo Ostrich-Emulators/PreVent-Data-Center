@@ -274,6 +274,13 @@ public final class WorkItem {
     private String type;
     private Path outputdir;
     private long size;
+    private String id;
+    private String container;
+    private LocalDateTime start;
+    private LocalDateTime finish;
+    private String format;
+    private String msg;
+    private Status status;
 
     private WorkItemBuilder( Path p ) {
       file = p;
@@ -337,8 +344,43 @@ public final class WorkItem {
                : outputdir );
     }
 
+    public WorkItemBuilder id( String id ) {
+      this.id = id;
+      return this;
+    }
+
+    public WorkItemBuilder container( String id ) {
+      this.container = id;
+      return this;
+    }
+
+    public WorkItemBuilder start( LocalDateTime t ) {
+      this.start = t;
+      return this;
+    }
+
+    public WorkItemBuilder finish( LocalDateTime t ) {
+      this.finish = t;
+      return this;
+    }
+
+    public WorkItemBuilder format( String f ) {
+      this.format = f;
+      return this;
+    }
+
+    public WorkItemBuilder status( Status s ) {
+      status = s;
+      return this;
+    }
+
+    public WorkItemBuilder message( String s ) {
+      msg = s;
+      return this;
+    }
+
     public WorkItem build() {
-      return new WorkItem( file, null, null, null, null, type, size, currentOutputDir() );
+      return new WorkItem( file, id, container, start, finish, type, size, currentOutputDir() );
     }
   }
 }

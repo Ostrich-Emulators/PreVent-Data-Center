@@ -2,6 +2,7 @@ package com.ostrichemulators.prevent;
 
 import com.ostrichemulators.prevent.App.ControllerAndParent;
 import com.ostrichemulators.prevent.WorkItem.Status;
+import com.ostrichemulators.prevent.datastore.DatastoreException;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
@@ -94,7 +95,7 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
       splitter.getItems().add( parent );
       splitter.setDividerPosition( 0, 1.0 );
     }
-    catch ( IOException x ) {
+    catch ( Exception x ) {
       LOG.error( "{}", x );
     }
 
@@ -245,7 +246,7 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
     }
   }
 
-  private void saveWorklist() throws IOException {
+  private void saveWorklist() throws DatastoreException {
     worklist.upsert( table.getItems().stream().map( conv -> conv.getItem() ).collect( Collectors.toList() ) );
   }
 
@@ -269,7 +270,7 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
   }
 
   @FXML
-  void addFiles() throws IOException {
+  void addFiles() throws DatastoreException {
     FileChooser chsr = new FileChooser();
     chsr.setTitle( "Create New Worklist Items" );
     chsr.setInitialDirectory( App.prefs.getLastOpenedDir() );
@@ -300,8 +301,13 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
     if ( null != dir ) {
       List<WorkItem> items = Worklist.recursively( dir.toPath(), nativestpx );
       table.getItems().addAll( App.converter.reinitializeItems( items, this ) );
-      saveWorklist();
-      App.prefs.setLastOpenedDir( dir.getParentFile() );
+      try {
+        saveWorklist();
+        App.prefs.setLastOpenedDir( dir.getParentFile() );
+      }
+      catch ( DatastoreException xx ) {
+        LOG.warn( "Could not save WorkItem update", xx );
+      }
     }
   }
 
@@ -311,7 +317,7 @@ public class PrimaryController implements Initializable, WorkItemStateChangeList
     try {
       saveWorklist();
     }
-    catch ( IOException xx ) {
+    catch ( DatastoreException xx ) {
       LOG.warn( "Could not save WorkItem update", xx );
     }
   }
