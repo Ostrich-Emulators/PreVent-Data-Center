@@ -53,7 +53,8 @@ public class Worklist implements AutoCloseable {
   public List<WorkItem> list() {
     try {
       items.clear();
-      items.addAll( db.getAllWorkItems() );
+      List<WorkItem> dbitems = db.getAllWorkItems();
+      items.addAll( dbitems );
     }
     catch ( DatastoreException x ) {
       LOG.error( "", x );
@@ -63,7 +64,7 @@ public class Worklist implements AutoCloseable {
   }
 
   public void upsert( List<WorkItem> upserts ) throws DatastoreException {
-    items.addAll( db.upsert( items ) );
+    items.addAll( db.upsert( upserts ) );
   }
 
   public static Optional<WorkItem> from( Path p, boolean nativestp ) {

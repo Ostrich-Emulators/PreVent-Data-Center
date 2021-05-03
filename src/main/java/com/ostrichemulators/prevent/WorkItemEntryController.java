@@ -11,7 +11,6 @@ import com.ostrichemulators.prevent.conversion.Logable;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.stream.Collectors;
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
@@ -35,6 +34,8 @@ public class WorkItemEntryController {
 
   private static final Logger LOG = LoggerFactory.getLogger( WorkItemEntryController.class );
   private Conversion item;
+  private LogType type;
+  private boolean err;
 
   @FXML
   private Label txtlbl;
@@ -76,6 +77,8 @@ public class WorkItemEntryController {
           outbtn.setDisable( !Files.exists( l.getOut() ) );
         }
       }
+
+      reshow();
     } );
   };
 
@@ -115,7 +118,15 @@ public class WorkItemEntryController {
     show( LogType.STP, false );
   }
 
+  private void reshow() {
+    if ( null != type ) {
+      show( type, err );
+    }
+  }
+
   private void show( LogType type, boolean err ) {
+    this.type = type;
+    this.err = err;
     try ( Reader input = item.getLogReader( type, err ) ) {
       listview.getItems().setAll( IOUtils.readLines( input ).stream().filter( s -> !s.isBlank() )
             .collect( Collectors.toList() ) );
